@@ -1,9 +1,9 @@
 --[[
     ═══════════════════════════════════════
-    🎯 FORTBLOX HUB - SIN LAG
+    🎯 FORTBLOX HUB - HITBOX FIXED
     ═══════════════════════════════════════
     Hitbox invisible + ESP + Chest ESP
-    100% optimizado para alto rendimiento
+    ✅ ARREGLADO: Ya no se congelan los enemigos
     by Gael Fonzar
     ═══════════════════════════════════════
 ]]
@@ -11,6 +11,7 @@
 -- Services
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 
@@ -23,7 +24,7 @@ local hitboxEnabled = false
 local chestESPEnabled = false
 
 local hitboxSize = 10
-local originalSizes = {} -- Guardar tamaños originales
+local hitboxParts = {} -- Guardar las partes invisibles
 local chestMarkers = {}
 
 -- Colors
@@ -207,56 +208,94 @@ local function disablePlayerESP()
 end
 
 -- ═══════════════════════════════════════
--- 🎯 HITBOX - ULTRA LIGERO (SOLO EXPANDIR)
+-- 🎯 HITBOX - ARREGLADO (SIN CONGELAR)
 -- ═══════════════════════════════════════
+
+local function createHitboxPart(targetPlayer)
+    local char = targetPlayer.Character
+    if not char then return end
+    
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    -- Limpiar hitbox anterior
+    if char:FindFirstChild("HITBOX_PART") then
+        char.HITBOX_PART:Destroy()
+    end
+    
+    -- Crear parte invisible que sigue al HRP
+    local hitboxPart = Instance.new("Part")
+    hitboxPart.Name = "HITBOX_PART"
+    hitboxPart.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
+    hitboxPart.Transparency = 1
+    hitboxPart.CanCollide = false
+    hitboxPart.Massless = true
+    hitboxPart.Anchored = false
+    hitboxPart.Parent = char
+    
+    -- Weld para que siga al HRP sin afectar su tamaño
+    local weld = Instance.new("WeldConstraint")
+    weld.Part0 = hrp
+    weld.Part1 = hitboxPart
+    weld.Parent = hitboxPart
+    
+    -- Hacer que esta parte sea la hitbox
+    hitboxPart.CanTouch = true
+    
+    -- Guardar referencia
+    hitboxParts[targetPlayer] = hitboxPart
+    
+    return hitboxPart
+end
 
 local function enableHitbox()
     hitboxEnabled = true
     
     for _, targetPlayer in pairs(Players:GetPlayers()) do
         if targetPlayer ~= player and targetPlayer.Character then
-            local hrp = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                -- Guardar tamaño original
-                originalSizes[hrp] = hrp.Size
-                
-                -- Expandir hitbox (INVISIBLE, SIN VISUAL)
-                hrp.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
-                hrp.Transparency = 1
-                hrp.CanCollide = false
-                hrp.Massless = true
-            end
+            createHitboxPart(targetPlayer)
         end
         
         -- Para nuevos spawns
         targetPlayer.CharacterAdded:Connect(function()
             task.wait(0.5)
-            if hitboxEnabled and targetPlayer.Character then
-                local hrp = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    originalSizes[hrp] = hrp.Size
-                    hrp.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
-                    hrp.Transparency = 1
-                    hrp.CanCollide = false
-                    hrp.Massless = true
-                end
+            if hitboxEnabled then
+                createHitboxPart(targetPlayer)
             end
         end)
     end
+    
+    -- Actualizar posiciones (backup por si el weld falla)
+    task.spawn(function()
+        while hitboxEnabled do
+            task.wait(0.1)
+            for targetPlayer, hitboxPart in pairs(hitboxParts) do
+                if hitboxPart and hitboxPart.Parent and targetPlayer.Character then
+                    local hrp = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp and not hitboxPart:FindFirstChildOfClass("WeldConstraint") then
+                        -- Si el weld se rompió, crear uno nuevo
+                        local weld = Instance.new("WeldConstraint")
+                        weld.Part0 = hrp
+                        weld.Part1 = hitboxPart
+                        weld.Parent = hitboxPart
+                    end
+                end
+            end
+        end
+    end)
 end
 
 local function disableHitbox()
     hitboxEnabled = false
     
-    -- Restaurar tamaños originales
-    for hrp, originalSize in pairs(originalSizes) do
-        if hrp and hrp.Parent then
-            hrp.Size = originalSize
-            hrp.Transparency = 1
+    -- Eliminar todas las partes de hitbox
+    for _, hitboxPart in pairs(hitboxParts) do
+        if hitboxPart and hitboxPart.Parent then
+            hitboxPart:Destroy()
         end
     end
     
-    originalSizes = {}
+    hitboxParts = {}
 end
 
 -- ═══════════════════════════════════════
@@ -359,7 +398,7 @@ end
 -- ═══════════════════════════════════════
 
 local Window = Rayfield:CreateWindow({
-    Name = "🎯 Fortblox Hub",
+    Name = "🎯 Fortblox Hub - Fixed",
     LoadingTitle = "Cargando...",
     LoadingSubtitle = "by Gael Fonzar",
     ConfigurationSaving = {
@@ -428,13 +467,13 @@ ESPTab:CreateSlider({
 local HitboxTab = Window:CreateTab("🎯 Hitbox", 4483362458)
 
 HitboxTab:CreateToggle({
-    Name = "🎯 Enable Hitbox (Invisible)",
+    Name = "🎯 Enable Hitbox (Fixed)",
     CurrentValue = false,
     Flag = "Hitbox",
     Callback = function(v)
         if v then
             enableHitbox()
-            Rayfield:Notify({Title = "Hitbox", Content = "Activado (Invisible)", Duration = 2})
+            Rayfield:Notify({Title = "Hitbox", Content = "✅ Activado (Sin congelar)", Duration = 2})
         else
             disableHitbox()
         end
@@ -457,9 +496,9 @@ HitboxTab:CreateSlider({
     end
 })
 
-HitboxTab:CreateLabel("✅ Hitbox 100% invisible")
-HitboxTab:CreateLabel("✅ Sin lag garantizado")
-HitboxTab:CreateLabel("✅ Solo expande la hitbox real")
+HitboxTab:CreateLabel("✅ Hitbox arreglado - Ya no congela")
+HitboxTab:CreateLabel("✅ Usa WeldConstraint en vez de Size")
+HitboxTab:CreateLabel("✅ 100% invisible y sin lag")
 
 -- CHEST TAB
 local ChestTab = Window:CreateTab("📦 Chest", 4483362458)
@@ -525,15 +564,16 @@ MiscTab:CreateButton({
     end
 })
 
-MiscTab:CreateLabel("📊 FPS: Sin impacto")
-MiscTab:CreateLabel("🎯 Hitbox: 100% optimizado")
-MiscTab:CreateLabel("👁️ ESP: Updates cada 0.5s")
+MiscTab:CreateLabel("✅ ARREGLADO: Sin congelamiento")
+MiscTab:CreateLabel("🎯 Método: WeldConstraint")
+MiscTab:CreateLabel("⚡ Performance: Óptimo")
 
 -- Success
 Rayfield:Notify({
     Title = "✅ Loaded!",
-    Content = "Sin lag garantizado",
+    Content = "Hitbox arreglado - Sin congelar",
     Duration = 5
 })
 
-print("✅ Fortblox Hub - Sin Lag!")
+print("✅ Fortblox Hub - Hitbox Fixed!")
+print("✅ Ya no se congelan los enemigos")
