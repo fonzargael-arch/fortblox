@@ -1,9 +1,9 @@
 --[[
     ═══════════════════════════════════════
-    🎯 FORTBLOX HUB - ULTRA OPTIMIZADO
+    🎯 FORTBLOX HUB - SIN LAG
     ═══════════════════════════════════════
-    Hitbox + ESP + Chest ESP
-    Sin lag, máximo rendimiento
+    Hitbox invisible + ESP + Chest ESP
+    100% optimizado para alto rendimiento
     by Gael Fonzar
     ═══════════════════════════════════════
 ]]
@@ -11,7 +11,6 @@
 -- Services
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 
@@ -23,10 +22,8 @@ local espEnabled = false
 local hitboxEnabled = false
 local chestESPEnabled = false
 
-local hitboxSize = 15
-local hitboxTransparency = 1 -- Invisible por defecto
-local espConnections = {}
-local hitboxParts = {}
+local hitboxSize = 10
+local originalSizes = {} -- Guardar tamaños originales
 local chestMarkers = {}
 
 -- Colors
@@ -46,7 +43,7 @@ local espSettings = {
 -- Chest ESP Settings
 local chestESPSettings = {
     ShowHighlight = true,
-    ShowDistance = true
+    ShowDistance = false
 }
 
 -- ═══════════════════════════════════════
@@ -69,84 +66,13 @@ local function createPlayerESP(targetPlayer)
     if not hrp then return end
     
     -- Limpiar ESP anterior
-    if hrp:FindFirstChild("ESP_BILLBOARD") then
-        hrp.ESP_BILLBOARD:Destroy()
-    end
-    
-    -- Crear Billboard
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "ESP_BILLBOARD"
-    billboard.Parent = hrp
-    billboard.AlwaysOnTop = true
-    billboard.Size = UDim2.new(0, 200, 0, 100)
-    billboard.StudsOffset = Vector3.new(0, 3, 0)
-    
-    local frame = Instance.new("Frame")
-    frame.Parent = billboard
-    frame.BackgroundTransparency = 1
-    frame.Size = UDim2.new(1, 0, 1, 0)
-    
-    -- Name
-    if espSettings.ShowNames then
-        local nameLabel = Instance.new("TextLabel")
-        nameLabel.Parent = frame
-        nameLabel.BackgroundTransparency = 1
-        nameLabel.Size = UDim2.new(1, 0, 0.3, 0)
-        nameLabel.Font = Enum.Font.GothamBold
-        nameLabel.TextSize = 14
-        nameLabel.TextColor3 = isEnemy(targetPlayer) and enemyColor or teamColor
-        nameLabel.TextStrokeTransparency = 0
-        nameLabel.Text = targetPlayer.Name
-    end
-    
-    -- Distance
-    if espSettings.ShowDistance then
-        local distLabel = Instance.new("TextLabel")
-        distLabel.Name = "DistanceLabel"
-        distLabel.Parent = frame
-        distLabel.BackgroundTransparency = 1
-        distLabel.Size = UDim2.new(1, 0, 0.3, 0)
-        distLabel.Position = UDim2.new(0, 0, 0.35, 0)
-        distLabel.Font = Enum.Font.Gotham
-        distLabel.TextSize = 12
-        distLabel.TextColor3 = Color3.new(1, 1, 1)
-        distLabel.TextStrokeTransparency = 0
-    end
-    
-    -- Health
-    if espSettings.ShowHealth and humanoid then
-        local healthLabel = Instance.new("TextLabel")
-        healthLabel.Name = "HealthLabel"
-        healthLabel.Parent = frame
-        healthLabel.BackgroundTransparency = 1
-        healthLabel.Size = UDim2.new(1, 0, 0.3, 0)
-        healthLabel.Position = UDim2.new(0, 0, 0.7, 0)
-        healthLabel.Font = Enum.Font.Gotham
-        healthLabel.TextSize = 12
-        healthLabel.TextStrokeTransparency = 0
-        
-        local function updateHealth()
-            if humanoid and healthLabel then
-                local hp = math.floor(humanoid.Health)
-                local maxHp = math.floor(humanoid.MaxHealth)
-                healthLabel.Text = "HP: " .. hp .. "/" .. maxHp
-                
-                local hpPercent = hp / maxHp
-                if hpPercent > 0.6 then
-                    healthLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-                elseif hpPercent > 0.3 then
-                    healthLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
-                else
-                    healthLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-                end
-            end
+    for _, obj in pairs(char:GetChildren()) do
+        if obj.Name == "ESP_BILLBOARD" or obj.Name == "ESP_HIGHLIGHT" then
+            obj:Destroy()
         end
-        
-        updateHealth()
-        humanoid.HealthChanged:Connect(updateHealth)
     end
     
-    -- Highlight
+    -- Highlight simple
     local highlight = Instance.new("Highlight")
     highlight.Name = "ESP_HIGHLIGHT"
     highlight.Parent = char
@@ -155,24 +81,98 @@ local function createPlayerESP(targetPlayer)
     highlight.FillColor = isEnemy(targetPlayer) and enemyColor or teamColor
     highlight.OutlineColor = isEnemy(targetPlayer) and enemyColor or teamColor
     
-    -- Update loop OPTIMIZADO (cada 0.5s en vez de RenderStepped)
-    local updateConn
-    updateConn = task.spawn(function()
-        while char and char.Parent and hrp.Parent do
-            task.wait(0.5) -- Actualizar cada medio segundo
-            
-            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                local distance = (hrp.Position - player.Character.HumanoidRootPart.Position).Magnitude
-                local distLabel = frame:FindFirstChild("DistanceLabel")
-                
-                if distLabel then
-                    distLabel.Text = math.floor(distance) .. "m"
-                end
-                
-                billboard.Enabled = distance <= espSettings.MaxDistance
-            end
+    -- Billboard solo si se necesita
+    if espSettings.ShowNames or espSettings.ShowDistance or espSettings.ShowHealth then
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "ESP_BILLBOARD"
+        billboard.Parent = hrp
+        billboard.AlwaysOnTop = true
+        billboard.Size = UDim2.new(0, 200, 0, 80)
+        billboard.StudsOffset = Vector3.new(0, 3, 0)
+        
+        local frame = Instance.new("Frame")
+        frame.Parent = billboard
+        frame.BackgroundTransparency = 1
+        frame.Size = UDim2.new(1, 0, 1, 0)
+        
+        local yPos = 0
+        
+        -- Name
+        if espSettings.ShowNames then
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Parent = frame
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Size = UDim2.new(1, 0, 0.33, 0)
+            nameLabel.Position = UDim2.new(0, 0, yPos, 0)
+            nameLabel.Font = Enum.Font.GothamBold
+            nameLabel.TextSize = 14
+            nameLabel.TextColor3 = isEnemy(targetPlayer) and enemyColor or teamColor
+            nameLabel.TextStrokeTransparency = 0
+            nameLabel.Text = targetPlayer.Name
+            yPos = yPos + 0.33
         end
-    end)
+        
+        -- Distance
+        if espSettings.ShowDistance then
+            local distLabel = Instance.new("TextLabel")
+            distLabel.Name = "DistLabel"
+            distLabel.Parent = frame
+            distLabel.BackgroundTransparency = 1
+            distLabel.Size = UDim2.new(1, 0, 0.33, 0)
+            distLabel.Position = UDim2.new(0, 0, yPos, 0)
+            distLabel.Font = Enum.Font.Gotham
+            distLabel.TextSize = 12
+            distLabel.TextColor3 = Color3.new(1, 1, 1)
+            distLabel.TextStrokeTransparency = 0
+            
+            -- Update optimizado
+            task.spawn(function()
+                while distLabel.Parent and hrp.Parent do
+                    task.wait(0.5)
+                    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                        local dist = (hrp.Position - player.Character.HumanoidRootPart.Position).Magnitude
+                        distLabel.Text = math.floor(dist) .. "m"
+                        billboard.Enabled = dist <= espSettings.MaxDistance
+                    end
+                end
+            end)
+            
+            yPos = yPos + 0.33
+        end
+        
+        -- Health
+        if espSettings.ShowHealth and humanoid then
+            local healthLabel = Instance.new("TextLabel")
+            healthLabel.Name = "HealthLabel"
+            healthLabel.Parent = frame
+            healthLabel.BackgroundTransparency = 1
+            healthLabel.Size = UDim2.new(1, 0, 0.33, 0)
+            healthLabel.Position = UDim2.new(0, 0, yPos, 0)
+            healthLabel.Font = Enum.Font.Gotham
+            healthLabel.TextSize = 12
+            healthLabel.TextStrokeTransparency = 0
+            
+            local function updateHealth()
+                if humanoid and healthLabel.Parent then
+                    local hp = math.floor(humanoid.Health)
+                    local maxHp = math.floor(humanoid.MaxHealth)
+                    healthLabel.Text = "HP: " .. hp .. "/" .. maxHp
+                    
+                    local hpPercent = hp / maxHp
+                    if hpPercent > 0.6 then
+                        healthLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+                    elseif hpPercent > 0.3 then
+                        healthLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+                    else
+                        healthLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+                    end
+                end
+            end
+            
+            updateHealth()
+            humanoid.HealthChanged:Connect(updateHealth)
+        end
+    end
 end
 
 local function enablePlayerESP()
@@ -190,15 +190,6 @@ local function enablePlayerESP()
             end
         end)
     end
-    
-    Players.PlayerAdded:Connect(function(targetPlayer)
-        targetPlayer.CharacterAdded:Connect(function()
-            task.wait(0.5)
-            if espEnabled then
-                createPlayerESP(targetPlayer)
-            end
-        end)
-    end)
 end
 
 local function disablePlayerESP()
@@ -216,66 +207,39 @@ local function disablePlayerESP()
 end
 
 -- ═══════════════════════════════════════
--- 🎯 HITBOX - ULTRA OPTIMIZADO (SIN LAG)
+-- 🎯 HITBOX - ULTRA LIGERO (SOLO EXPANDIR)
 -- ═══════════════════════════════════════
-
-local function createCircularHitbox(targetPlayer)
-    local char = targetPlayer.Character
-    if not char then return end
-    
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    
-    -- Limpiar hitbox anterior
-    if hrp:FindFirstChild("HITBOX_PART") then
-        hrp.HITBOX_PART:Destroy()
-    end
-    
-    -- Solo expandir HumanoidRootPart (invisible)
-    hrp.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
-    hrp.Transparency = 1
-    hrp.CanCollide = false
-    hrp.Massless = true
-    
-    -- Solo crear visual si transparency < 1
-    if hitboxTransparency < 1 then
-        local hitbox = Instance.new("Part")
-        hitbox.Name = "HITBOX_PART"
-        hitbox.Parent = hrp
-        hitbox.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
-        hitbox.Shape = Enum.PartType.Ball
-        hitbox.Transparency = hitboxTransparency
-        hitbox.Color = isEnemy(targetPlayer) and enemyColor or teamColor
-        hitbox.Material = Enum.Material.ForceField
-        hitbox.CanCollide = false
-        hitbox.Anchored = false
-        hitbox.Massless = true
-        hitbox.CFrame = hrp.CFrame
-        
-        -- Weld simple
-        local weld = Instance.new("Weld")
-        weld.Parent = hitbox
-        weld.Part0 = hrp
-        weld.Part1 = hitbox
-        weld.C0 = CFrame.new(0, 0, 0)
-        weld.C1 = CFrame.new(0, 0, 0)
-        
-        table.insert(hitboxParts, hitbox)
-    end
-end
 
 local function enableHitbox()
     hitboxEnabled = true
     
     for _, targetPlayer in pairs(Players:GetPlayers()) do
         if targetPlayer ~= player and targetPlayer.Character then
-            createCircularHitbox(targetPlayer)
+            local hrp = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                -- Guardar tamaño original
+                originalSizes[hrp] = hrp.Size
+                
+                -- Expandir hitbox (INVISIBLE, SIN VISUAL)
+                hrp.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
+                hrp.Transparency = 1
+                hrp.CanCollide = false
+                hrp.Massless = true
+            end
         end
         
+        -- Para nuevos spawns
         targetPlayer.CharacterAdded:Connect(function()
             task.wait(0.5)
-            if hitboxEnabled then
-                createCircularHitbox(targetPlayer)
+            if hitboxEnabled and targetPlayer.Character then
+                local hrp = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    originalSizes[hrp] = hrp.Size
+                    hrp.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
+                    hrp.Transparency = 1
+                    hrp.CanCollide = false
+                    hrp.Massless = true
+                end
             end
         end)
     end
@@ -284,28 +248,15 @@ end
 local function disableHitbox()
     hitboxEnabled = false
     
-    -- Limpiar hitboxes visuales
-    for _, hitbox in pairs(hitboxParts) do
-        if hitbox and hitbox.Parent then
-            hitbox:Destroy()
+    -- Restaurar tamaños originales
+    for hrp, originalSize in pairs(originalSizes) do
+        if hrp and hrp.Parent then
+            hrp.Size = originalSize
+            hrp.Transparency = 1
         end
     end
-    hitboxParts = {}
     
-    -- Restaurar tamaño original
-    for _, targetPlayer in pairs(Players:GetPlayers()) do
-        if targetPlayer.Character then
-            local hrp = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                hrp.Size = Vector3.new(2, 2, 1)
-                hrp.Transparency = 1
-                
-                if hrp:FindFirstChild("HITBOX_PART") then
-                    hrp.HITBOX_PART:Destroy()
-                end
-            end
-        end
-    end
+    originalSizes = {}
 end
 
 -- ═══════════════════════════════════════
@@ -315,7 +266,7 @@ end
 local function createChestMarker(chest)
     if chest:FindFirstChild("CHEST_MARKER") then return end
     
-    -- Highlight
+    -- Solo Highlight (sin billboard para mejor rendimiento)
     if chestESPSettings.ShowHighlight then
         local highlight = Instance.new("Highlight")
         highlight.Name = "CHEST_MARKER"
@@ -326,17 +277,19 @@ local function createChestMarker(chest)
         highlight.OutlineTransparency = 0
     end
     
-    -- Distance (opcional)
+    -- Distance opcional
     if chestESPSettings.ShowDistance then
+        local chestPart = chest:IsA("Model") and chest.PrimaryPart or chest
+        if not chestPart then return end
+        
         local billboard = Instance.new("BillboardGui")
         billboard.Name = "CHEST_BILLBOARD"
-        billboard.Parent = chest
+        billboard.Parent = chestPart
         billboard.AlwaysOnTop = true
-        billboard.Size = UDim2.new(0, 100, 0, 30)
+        billboard.Size = UDim2.new(0, 80, 0, 25)
         billboard.StudsOffset = Vector3.new(0, 2, 0)
         
         local distLabel = Instance.new("TextLabel")
-        distLabel.Name = "DistanceLabel"
         distLabel.Parent = billboard
         distLabel.Size = UDim2.new(1, 0, 1, 0)
         distLabel.BackgroundTransparency = 1
@@ -345,23 +298,14 @@ local function createChestMarker(chest)
         distLabel.Font = Enum.Font.GothamBold
         distLabel.TextSize = 12
         
-        -- Update loop optimizado
+        -- Update cada 1 segundo
         task.spawn(function()
-            while distLabel and distLabel.Parent and chest and chest.Parent do
-                task.wait(1) -- Cada segundo
+            while distLabel.Parent and chestPart.Parent do
+                task.wait(1)
                 
                 if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                    local chestPos
-                    if chest:IsA("Model") and chest.PrimaryPart then
-                        chestPos = chest.PrimaryPart.Position
-                    elseif chest:IsA("Part") then
-                        chestPos = chest.Position
-                    end
-                    
-                    if chestPos then
-                        local dist = (chestPos - player.Character.HumanoidRootPart.Position).Magnitude
-                        distLabel.Text = math.floor(dist) .. "m"
-                    end
+                    local dist = (chestPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
+                    distLabel.Text = math.floor(dist) .. "m"
                 end
             end
         end)
@@ -404,14 +348,14 @@ end
 
 local function updateChestESP()
     disableChestESP()
-    task.wait(0.3)
+    task.wait(0.2)
     if chestESPEnabled then
         enableChestESP()
     end
 end
 
 -- ═══════════════════════════════════════
--- 🎨 GUI - MINIMALISTA Y EDITABLE
+-- 🎨 GUI
 -- ═══════════════════════════════════════
 
 local Window = Rayfield:CreateWindow({
@@ -426,10 +370,7 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false
 })
 
--- ═══════════════════════════════════════
 -- ESP TAB
--- ═══════════════════════════════════════
-
 local ESPTab = Window:CreateTab("👁️ ESP", 4483362458)
 
 ESPTab:CreateToggle({
@@ -439,7 +380,7 @@ ESPTab:CreateToggle({
     Callback = function(v)
         if v then
             enablePlayerESP()
-            Rayfield:Notify({Title = "ESP", Content = "Player ESP activado", Duration = 2})
+            Rayfield:Notify({Title = "ESP", Content = "Activado", Duration = 2})
         else
             disablePlayerESP()
         end
@@ -450,36 +391,28 @@ ESPTab:CreateToggle({
     Name = "Show Names",
     CurrentValue = true,
     Flag = "ESPNames",
-    Callback = function(v)
-        espSettings.ShowNames = v
-    end
+    Callback = function(v) espSettings.ShowNames = v end
 })
 
 ESPTab:CreateToggle({
     Name = "Show Distance",
     CurrentValue = true,
     Flag = "ESPDistance",
-    Callback = function(v)
-        espSettings.ShowDistance = v
-    end
+    Callback = function(v) espSettings.ShowDistance = v end
 })
 
 ESPTab:CreateToggle({
     Name = "Show Health",
     CurrentValue = true,
     Flag = "ESPHealth",
-    Callback = function(v)
-        espSettings.ShowHealth = v
-    end
+    Callback = function(v) espSettings.ShowHealth = v end
 })
 
 ESPTab:CreateToggle({
     Name = "Team Check",
     CurrentValue = true,
     Flag = "ESPTeamCheck",
-    Callback = function(v)
-        espSettings.TeamCheck = v
-    end
+    Callback = function(v) espSettings.TeamCheck = v end
 })
 
 ESPTab:CreateSlider({
@@ -488,25 +421,20 @@ ESPTab:CreateSlider({
     Increment = 100,
     CurrentValue = 2000,
     Flag = "ESPMaxDist",
-    Callback = function(v)
-        espSettings.MaxDistance = v
-    end
+    Callback = function(v) espSettings.MaxDistance = v end
 })
 
--- ═══════════════════════════════════════
 -- HITBOX TAB
--- ═══════════════════════════════════════
-
 local HitboxTab = Window:CreateTab("🎯 Hitbox", 4483362458)
 
 HitboxTab:CreateToggle({
-    Name = "🎯 Enable Hitbox",
+    Name = "🎯 Enable Hitbox (Invisible)",
     CurrentValue = false,
     Flag = "Hitbox",
     Callback = function(v)
         if v then
             enableHitbox()
-            Rayfield:Notify({Title = "Hitbox", Content = "Hitbox activado", Duration = 2})
+            Rayfield:Notify({Title = "Hitbox", Content = "Activado (Invisible)", Duration = 2})
         else
             disableHitbox()
         end
@@ -517,7 +445,7 @@ HitboxTab:CreateSlider({
     Name = "Hitbox Size",
     Range = {5, 50},
     Increment = 1,
-    CurrentValue = 15,
+    CurrentValue = 10,
     Flag = "HitboxSize",
     Callback = function(v)
         hitboxSize = v
@@ -529,28 +457,11 @@ HitboxTab:CreateSlider({
     end
 })
 
-HitboxTab:CreateSlider({
-    Name = "Visual Transparency (1=Invisible)",
-    Range = {0, 1},
-    Increment = 0.1,
-    CurrentValue = 1,
-    Flag = "HitboxTrans",
-    Callback = function(v)
-        hitboxTransparency = v
-        if hitboxEnabled then
-            disableHitbox()
-            task.wait(0.1)
-            enableHitbox()
-        end
-    end
-})
+HitboxTab:CreateLabel("✅ Hitbox 100% invisible")
+HitboxTab:CreateLabel("✅ Sin lag garantizado")
+HitboxTab:CreateLabel("✅ Solo expande la hitbox real")
 
-HitboxTab:CreateLabel("💡 Tip: Usar transparency=1 para mejor rendimiento")
-
--- ═══════════════════════════════════════
 -- CHEST TAB
--- ═══════════════════════════════════════
-
 local ChestTab = Window:CreateTab("📦 Chest", 4483362458)
 
 ChestTab:CreateToggle({
@@ -560,7 +471,7 @@ ChestTab:CreateToggle({
     Callback = function(v)
         if v then
             enableChestESP()
-            Rayfield:Notify({Title = "Chest ESP", Content = "Chest ESP activado", Duration = 2})
+            Rayfield:Notify({Title = "Chest ESP", Content = "Activado", Duration = 2})
         else
             disableChestESP()
         end
@@ -579,7 +490,7 @@ ChestTab:CreateToggle({
 
 ChestTab:CreateToggle({
     Name = "Show Distance",
-    CurrentValue = true,
+    CurrentValue = false,
     Flag = "ChestDistance",
     Callback = function(v)
         chestESPSettings.ShowDistance = v
@@ -591,16 +502,13 @@ ChestTab:CreateButton({
     Name = "🔄 Refresh Scan",
     Callback = function()
         disableChestESP()
-        task.wait(0.5)
+        task.wait(0.3)
         enableChestESP()
-        Rayfield:Notify({Title = "Refreshed", Content = "Chest scan actualizado", Duration = 2})
+        Rayfield:Notify({Title = "Refreshed", Content = "Actualizado", Duration = 2})
     end
 })
 
--- ═══════════════════════════════════════
 -- MISC TAB
--- ═══════════════════════════════════════
-
 local MiscTab = Window:CreateTab("⚙️ Misc", 4483362458)
 
 MiscTab:CreateButton({
@@ -617,11 +525,15 @@ MiscTab:CreateButton({
     end
 })
 
+MiscTab:CreateLabel("📊 FPS: Sin impacto")
+MiscTab:CreateLabel("🎯 Hitbox: 100% optimizado")
+MiscTab:CreateLabel("👁️ ESP: Updates cada 0.5s")
+
 -- Success
 Rayfield:Notify({
     Title = "✅ Loaded!",
-    Content = "Fortblox Hub - Optimizado",
+    Content = "Sin lag garantizado",
     Duration = 5
 })
 
-print("✅ Fortblox Hub loaded!")
+print("✅ Fortblox Hub - Sin Lag!")
