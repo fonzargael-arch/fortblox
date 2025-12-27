@@ -1,9 +1,10 @@
 --[[
     ═══════════════════════════════════════
-    🎯 FORTBLOX ULTIMATE HUB
+    🎯 FORTBLOX HUB - ULTRA OPTIMIZADO
     ═══════════════════════════════════════
-    Created by: Gael Fonzar
-    Features: ESP, Hitbox, Auto Loot, Chest Finder
+    Hitbox + ESP + Chest ESP
+    Sin lag, máximo rendimiento
+    by Gael Fonzar
     ═══════════════════════════════════════
 ]]
 
@@ -11,8 +12,6 @@
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local Camera = Workspace.CurrentCamera
 
 local player = Players.LocalPlayer
 
@@ -23,40 +22,35 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local espEnabled = false
 local hitboxEnabled = false
 local chestESPEnabled = false
-local weaponESPEnabled = false
-local materialESPEnabled = false
-local autoOpenChestsEnabled = false
-local autoPickupWeaponsEnabled = false
-local flyEnabled = false
-local noClipEnabled = false
 
 local hitboxSize = 15
-local hitboxTransparency = 0.5
+local hitboxTransparency = 1 -- Invisible por defecto
 local espConnections = {}
 local hitboxParts = {}
 local chestMarkers = {}
-local weaponMarkers = {}
-local materialMarkers = {}
 
 -- Colors
 local enemyColor = Color3.fromRGB(255, 0, 0)
 local teamColor = Color3.fromRGB(0, 255, 0)
 local chestColor = Color3.fromRGB(255, 215, 0)
-local weaponColor = Color3.fromRGB(138, 43, 226)
-local materialColor = Color3.fromRGB(0, 191, 255)
 
 -- ESP Settings
 local espSettings = {
     ShowNames = true,
     ShowDistance = true,
     ShowHealth = true,
-    ShowBoxes = true,
     TeamCheck = true,
     MaxDistance = 2000
 }
 
+-- Chest ESP Settings
+local chestESPSettings = {
+    ShowHighlight = true,
+    ShowDistance = true
+}
+
 -- ═══════════════════════════════════════
--- 👁️ PLAYER ESP
+-- 👁️ PLAYER ESP - OPTIMIZADO
 -- ═══════════════════════════════════════
 
 local function isEnemy(targetPlayer)
@@ -74,10 +68,12 @@ local function createPlayerESP(targetPlayer)
     
     if not hrp then return end
     
+    -- Limpiar ESP anterior
     if hrp:FindFirstChild("ESP_BILLBOARD") then
         hrp.ESP_BILLBOARD:Destroy()
     end
     
+    -- Crear Billboard
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "ESP_BILLBOARD"
     billboard.Parent = hrp
@@ -90,6 +86,7 @@ local function createPlayerESP(targetPlayer)
     frame.BackgroundTransparency = 1
     frame.Size = UDim2.new(1, 0, 1, 0)
     
+    -- Name
     if espSettings.ShowNames then
         local nameLabel = Instance.new("TextLabel")
         nameLabel.Parent = frame
@@ -102,6 +99,7 @@ local function createPlayerESP(targetPlayer)
         nameLabel.Text = targetPlayer.Name
     end
     
+    -- Distance
     if espSettings.ShowDistance then
         local distLabel = Instance.new("TextLabel")
         distLabel.Name = "DistanceLabel"
@@ -115,6 +113,7 @@ local function createPlayerESP(targetPlayer)
         distLabel.TextStrokeTransparency = 0
     end
     
+    -- Health
     if espSettings.ShowHealth and humanoid then
         local healthLabel = Instance.new("TextLabel")
         healthLabel.Name = "HealthLabel"
@@ -147,80 +146,63 @@ local function createPlayerESP(targetPlayer)
         humanoid.HealthChanged:Connect(updateHealth)
     end
     
-    if espSettings.ShowBoxes then
-        local highlight = Instance.new("Highlight")
-        highlight.Name = "ESP_HIGHLIGHT"
-        highlight.Parent = char
-        highlight.FillTransparency = 0.7
-        highlight.OutlineTransparency = 0
-        highlight.FillColor = isEnemy(targetPlayer) and enemyColor or teamColor
-        highlight.OutlineColor = isEnemy(targetPlayer) and enemyColor or teamColor
-    end
+    -- Highlight
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "ESP_HIGHLIGHT"
+    highlight.Parent = char
+    highlight.FillTransparency = 0.7
+    highlight.OutlineTransparency = 0
+    highlight.FillColor = isEnemy(targetPlayer) and enemyColor or teamColor
+    highlight.OutlineColor = isEnemy(targetPlayer) and enemyColor or teamColor
     
-    local updateConnection
-    updateConnection = RunService.RenderStepped:Connect(function()
-        if not char or not char.Parent or not hrp.Parent then
-            updateConnection:Disconnect()
-            return
-        end
-        
-        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local distance = (hrp.Position - player.Character.HumanoidRootPart.Position).Magnitude
-            local distLabel = frame:FindFirstChild("DistanceLabel")
-            if distLabel then
-                distLabel.Text = math.floor(distance) .. "m"
-            end
+    -- Update loop OPTIMIZADO (cada 0.5s en vez de RenderStepped)
+    local updateConn
+    updateConn = task.spawn(function()
+        while char and char.Parent and hrp.Parent do
+            task.wait(0.5) -- Actualizar cada medio segundo
             
-            if distance > espSettings.MaxDistance then
-                billboard.Enabled = false
-            else
-                billboard.Enabled = true
+            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local distance = (hrp.Position - player.Character.HumanoidRootPart.Position).Magnitude
+                local distLabel = frame:FindFirstChild("DistanceLabel")
+                
+                if distLabel then
+                    distLabel.Text = math.floor(distance) .. "m"
+                end
+                
+                billboard.Enabled = distance <= espSettings.MaxDistance
             end
         end
     end)
-    
-    table.insert(espConnections, updateConnection)
 end
 
 local function enablePlayerESP()
     espEnabled = true
     
     for _, targetPlayer in pairs(Players:GetPlayers()) do
-        if targetPlayer ~= player then
-            if targetPlayer.Character then
+        if targetPlayer ~= player and targetPlayer.Character then
+            createPlayerESP(targetPlayer)
+        end
+        
+        targetPlayer.CharacterAdded:Connect(function()
+            task.wait(0.5)
+            if espEnabled then
                 createPlayerESP(targetPlayer)
             end
-            
-            targetPlayer.CharacterAdded:Connect(function()
-                wait(0.5)
-                if espEnabled then
-                    createPlayerESP(targetPlayer)
-                end
-            end)
-        end
+        end)
     end
     
-    table.insert(espConnections, Players.PlayerAdded:Connect(function(targetPlayer)
-        if targetPlayer ~= player then
-            targetPlayer.CharacterAdded:Connect(function()
-                wait(0.5)
-                if espEnabled then
-                    createPlayerESP(targetPlayer)
-                end
-            end)
-        end
-    end))
+    Players.PlayerAdded:Connect(function(targetPlayer)
+        targetPlayer.CharacterAdded:Connect(function()
+            task.wait(0.5)
+            if espEnabled then
+                createPlayerESP(targetPlayer)
+            end
+        end)
+    end)
 end
 
 local function disablePlayerESP()
     espEnabled = false
-    
-    for _, connection in pairs(espConnections) do
-        if typeof(connection) == "RBXScriptConnection" then
-            connection:Disconnect()
-        end
-    end
-    espConnections = {}
     
     for _, targetPlayer in pairs(Players:GetPlayers()) do
         if targetPlayer.Character then
@@ -234,7 +216,7 @@ local function disablePlayerESP()
 end
 
 -- ═══════════════════════════════════════
--- 🎯 CIRCULAR HITBOX
+-- 🎯 HITBOX - ULTRA OPTIMIZADO (SIN LAG)
 -- ═══════════════════════════════════════
 
 local function createCircularHitbox(targetPlayer)
@@ -244,72 +226,65 @@ local function createCircularHitbox(targetPlayer)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
     
+    -- Limpiar hitbox anterior
     if hrp:FindFirstChild("HITBOX_PART") then
         hrp.HITBOX_PART:Destroy()
     end
     
+    -- Solo expandir HumanoidRootPart (invisible)
     hrp.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
     hrp.Transparency = 1
     hrp.CanCollide = false
     hrp.Massless = true
     
-    local hitbox = Instance.new("Part")
-    hitbox.Name = "HITBOX_PART"
-    hitbox.Parent = hrp
-    hitbox.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
-    hitbox.Shape = Enum.PartType.Ball
-    hitbox.Transparency = hitboxTransparency
-    hitbox.Color = isEnemy(targetPlayer) and enemyColor or teamColor
-    hitbox.Material = Enum.Material.Neon
-    hitbox.CanCollide = false
-    hitbox.Anchored = false
-    hitbox.Massless = true
-    hitbox.CFrame = hrp.CFrame
-    
-    local weld = Instance.new("Weld")
-    weld.Name = "HitboxWeld"
-    weld.Parent = hitbox
-    weld.Part0 = hrp
-    weld.Part1 = hitbox
-    weld.C0 = CFrame.new(0, 0, 0)
-    weld.C1 = CFrame.new(0, 0, 0)
-    
-    table.insert(hitboxParts, hitbox)
-    
-    local updateConn
-    updateConn = RunService.Heartbeat:Connect(function()
-        if hitbox and hitbox.Parent and hrp and hrp.Parent then
-            hitbox.CFrame = hrp.CFrame
-        else
-            updateConn:Disconnect()
-        end
-    end)
-    
-    table.insert(espConnections, updateConn)
+    -- Solo crear visual si transparency < 1
+    if hitboxTransparency < 1 then
+        local hitbox = Instance.new("Part")
+        hitbox.Name = "HITBOX_PART"
+        hitbox.Parent = hrp
+        hitbox.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
+        hitbox.Shape = Enum.PartType.Ball
+        hitbox.Transparency = hitboxTransparency
+        hitbox.Color = isEnemy(targetPlayer) and enemyColor or teamColor
+        hitbox.Material = Enum.Material.ForceField
+        hitbox.CanCollide = false
+        hitbox.Anchored = false
+        hitbox.Massless = true
+        hitbox.CFrame = hrp.CFrame
+        
+        -- Weld simple
+        local weld = Instance.new("Weld")
+        weld.Parent = hitbox
+        weld.Part0 = hrp
+        weld.Part1 = hitbox
+        weld.C0 = CFrame.new(0, 0, 0)
+        weld.C1 = CFrame.new(0, 0, 0)
+        
+        table.insert(hitboxParts, hitbox)
+    end
 end
 
 local function enableHitbox()
     hitboxEnabled = true
     
     for _, targetPlayer in pairs(Players:GetPlayers()) do
-        if targetPlayer ~= player then
-            if targetPlayer.Character then
+        if targetPlayer ~= player and targetPlayer.Character then
+            createCircularHitbox(targetPlayer)
+        end
+        
+        targetPlayer.CharacterAdded:Connect(function()
+            task.wait(0.5)
+            if hitboxEnabled then
                 createCircularHitbox(targetPlayer)
             end
-            
-            targetPlayer.CharacterAdded:Connect(function()
-                wait(0.5)
-                if hitboxEnabled then
-                    createCircularHitbox(targetPlayer)
-                end
-            end)
-        end
+        end)
     end
 end
 
 local function disableHitbox()
     hitboxEnabled = false
     
+    -- Limpiar hitboxes visuales
     for _, hitbox in pairs(hitboxParts) do
         if hitbox and hitbox.Parent then
             hitbox:Destroy()
@@ -317,6 +292,7 @@ local function disableHitbox()
     end
     hitboxParts = {}
     
+    -- Restaurar tamaño original
     for _, targetPlayer in pairs(Players:GetPlayers()) do
         if targetPlayer.Character then
             local hrp = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -333,49 +309,75 @@ local function disableHitbox()
 end
 
 -- ═══════════════════════════════════════
--- 📦 CHEST ESP & AUTO OPEN
+-- 📦 CHEST ESP - OPTIMIZADO
 -- ═══════════════════════════════════════
 
 local function createChestMarker(chest)
     if chest:FindFirstChild("CHEST_MARKER") then return end
     
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "CHEST_MARKER"
-    highlight.Parent = chest
-    highlight.FillColor = chestColor
-    highlight.OutlineColor = chestColor
-    highlight.FillTransparency = 0.5
-    highlight.OutlineTransparency = 0
+    -- Highlight
+    if chestESPSettings.ShowHighlight then
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "CHEST_MARKER"
+        highlight.Parent = chest
+        highlight.FillColor = chestColor
+        highlight.OutlineColor = chestColor
+        highlight.FillTransparency = 0.5
+        highlight.OutlineTransparency = 0
+    end
     
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "CHEST_BILLBOARD"
-    billboard.Parent = chest
-    billboard.AlwaysOnTop = true
-    billboard.Size = UDim2.new(0, 150, 0, 50)
-    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    -- Distance (opcional)
+    if chestESPSettings.ShowDistance then
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "CHEST_BILLBOARD"
+        billboard.Parent = chest
+        billboard.AlwaysOnTop = true
+        billboard.Size = UDim2.new(0, 100, 0, 30)
+        billboard.StudsOffset = Vector3.new(0, 2, 0)
+        
+        local distLabel = Instance.new("TextLabel")
+        distLabel.Name = "DistanceLabel"
+        distLabel.Parent = billboard
+        distLabel.Size = UDim2.new(1, 0, 1, 0)
+        distLabel.BackgroundTransparency = 1
+        distLabel.TextColor3 = Color3.new(1, 1, 1)
+        distLabel.TextStrokeTransparency = 0
+        distLabel.Font = Enum.Font.GothamBold
+        distLabel.TextSize = 12
+        
+        -- Update loop optimizado
+        task.spawn(function()
+            while distLabel and distLabel.Parent and chest and chest.Parent do
+                task.wait(1) -- Cada segundo
+                
+                if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    local chestPos
+                    if chest:IsA("Model") and chest.PrimaryPart then
+                        chestPos = chest.PrimaryPart.Position
+                    elseif chest:IsA("Part") then
+                        chestPos = chest.Position
+                    end
+                    
+                    if chestPos then
+                        local dist = (chestPos - player.Character.HumanoidRootPart.Position).Magnitude
+                        distLabel.Text = math.floor(dist) .. "m"
+                    end
+                end
+            end
+        end)
+    end
     
-    local label = Instance.new("TextLabel")
-    label.Parent = billboard
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = chestColor
-    label.TextStrokeTransparency = 0
-    label.Font = Enum.Font.GothamBold
-    label.TextSize = 16
-    label.Text = "📦 CHEST"
-    
-    table.insert(chestMarkers, {chest = chest, highlight = highlight, billboard = billboard})
+    table.insert(chestMarkers, chest)
 end
 
 local function scanChests()
     for _, obj in pairs(Workspace:GetDescendants()) do
         local name = obj.Name:lower()
-        if obj:IsA("Model") or obj:IsA("Part") then
-            if name:find("chest") or name:find("loot") or name:find("crate") or name:find("box") then
-                local isOpen = obj:FindFirstChild("Opened") or obj:GetAttribute("Opened")
-                if not isOpen then
-                    createChestMarker(obj)
-                end
+        if (obj:IsA("Model") or obj:IsA("Part")) and 
+           (name:find("chest") or name:find("loot") or name:find("crate") or name:find("box")) then
+            local isOpen = obj:FindFirstChild("Opened") or obj:GetAttribute("Opened")
+            if not isOpen then
+                createChestMarker(obj)
             end
         end
     end
@@ -389,371 +391,209 @@ end
 local function disableChestESP()
     chestESPEnabled = false
     
-    for _, data in pairs(chestMarkers) do
-        if data.highlight then data.highlight:Destroy() end
-        if data.billboard then data.billboard:Destroy() end
+    for _, chest in pairs(chestMarkers) do
+        if chest and chest.Parent then
+            local marker = chest:FindFirstChild("CHEST_MARKER")
+            local billboard = chest:FindFirstChild("CHEST_BILLBOARD")
+            if marker then marker:Destroy() end
+            if billboard then billboard:Destroy() end
+        end
     end
     chestMarkers = {}
 end
 
--- Auto Open Chests
-task.spawn(function()
-    while task.wait(0.5) do
-        if autoOpenChestsEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local hrp = player.Character.HumanoidRootPart
-            
-            for _, obj in pairs(Workspace:GetDescendants()) do
-                local name = obj.Name:lower()
-                if (obj:IsA("Model") or obj:IsA("Part")) and (name:find("chest") or name:find("loot") or name:find("crate")) then
-                    if obj:IsA("Model") and obj.PrimaryPart then
-                        local dist = (obj.PrimaryPart.Position - hrp.Position).Magnitude
-                        if dist < 20 then
-                            local clickDetector = obj:FindFirstChildOfClass("ClickDetector", true)
-                            if clickDetector and fireclickdetector then
-                                fireclickdetector(clickDetector)
-                            end
-                            
-                            local proximityPrompt = obj:FindFirstChildOfClass("ProximityPrompt", true)
-                            if proximityPrompt and fireproximityprompt then
-                                fireproximityprompt(proximityPrompt)
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-end)
-
--- ═══════════════════════════════════════
--- 🚁 FLY & NOCLIP
--- ═══════════════════════════════════════
-
-local flySpeed = 50
-local flying = false
-
-local function startFly()
-    flying = true
-    local char = player.Character
-    if not char then return end
-    
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    
-    local bv = Instance.new("BodyVelocity")
-    bv.Name = "FlyVelocity"
-    bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-    bv.Velocity = Vector3.new(0, 0, 0)
-    bv.Parent = hrp
-    
-    local bg = Instance.new("BodyGyro")
-    bg.Name = "FlyGyro"
-    bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-    bg.Parent = hrp
-    
-    local flyConn
-    flyConn = RunService.Heartbeat:Connect(function()
-        if not flying or not char or not hrp then
-            if bv then bv:Destroy() end
-            if bg then bg:Destroy() end
-            flyConn:Disconnect()
-            return
-        end
-        
-        local cam = Camera
-        local speed = flySpeed
-        
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-            speed = speed * 2
-        end
-        
-        local velocity = Vector3.new(0, 0, 0)
-        
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-            velocity = velocity + cam.CFrame.LookVector * speed
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-            velocity = velocity - cam.CFrame.LookVector * speed
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-            velocity = velocity - cam.CFrame.RightVector * speed
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-            velocity = velocity + cam.CFrame.RightVector * speed
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-            velocity = velocity + Vector3.new(0, speed, 0)
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-            velocity = velocity - Vector3.new(0, speed, 0)
-        end
-        
-        bv.Velocity = velocity
-        bg.CFrame = cam.CFrame
-    end)
-end
-
-local function stopFly()
-    flying = false
-    local char = player.Character
-    if char then
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            local bv = hrp:FindFirstChild("FlyVelocity")
-            local bg = hrp:FindFirstChild("FlyGyro")
-            if bv then bv:Destroy() end
-            if bg then bg:Destroy() end
-        end
-    end
-end
-
--- NoClip
-local noClipConn
-local function enableNoClip()
-    local char = player.Character
-    if not char then return end
-    
-    noClipConn = RunService.Stepped:Connect(function()
-        if noClipEnabled and char then
-            for _, part in pairs(char:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = false
-                end
-            end
-        end
-    end)
-end
-
-local function disableNoClip()
-    if noClipConn then
-        noClipConn:Disconnect()
-    end
-    
-    local char = player.Character
-    if char then
-        for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                part.CanCollide = true
-            end
-        end
+local function updateChestESP()
+    disableChestESP()
+    task.wait(0.3)
+    if chestESPEnabled then
+        enableChestESP()
     end
 end
 
 -- ═══════════════════════════════════════
--- 🎨 CREATE GUI
+-- 🎨 GUI - MINIMALISTA Y EDITABLE
 -- ═══════════════════════════════════════
 
 local Window = Rayfield:CreateWindow({
-    Name = "🎯 Fortblox Ultimate Hub",
-    LoadingTitle = "Loading Fortblox Hub...",
+    Name = "🎯 Fortblox Hub",
+    LoadingTitle = "Cargando...",
     LoadingSubtitle = "by Gael Fonzar",
     ConfigurationSaving = {
         Enabled = true,
-        FolderName = "FortbloxUltimate",
-        FileName = "FortbloxConfig"
+        FolderName = "FortbloxHub",
+        FileName = "Config"
     },
     KeySystem = false
 })
 
 -- ═══════════════════════════════════════
--- COMBAT TAB
+-- ESP TAB
 -- ═══════════════════════════════════════
 
-local CombatTab = Window:CreateTab("⚔️ Combat", 4483362458)
+local ESPTab = Window:CreateTab("👁️ ESP", 4483362458)
 
-CombatTab:CreateSection("Player ESP")
-
-CombatTab:CreateToggle({
+ESPTab:CreateToggle({
     Name = "👁️ Enable Player ESP",
     CurrentValue = false,
+    Flag = "PlayerESP",
     Callback = function(v)
         if v then
             enablePlayerESP()
-            Rayfield:Notify({Title = "👁️ ESP ON", Content = "Player ESP enabled", Duration = 3})
+            Rayfield:Notify({Title = "ESP", Content = "Player ESP activado", Duration = 2})
         else
             disablePlayerESP()
         end
     end
 })
 
-CombatTab:CreateToggle({
+ESPTab:CreateToggle({
     Name = "Show Names",
     CurrentValue = true,
-    Callback = function(v) espSettings.ShowNames = v end
+    Flag = "ESPNames",
+    Callback = function(v)
+        espSettings.ShowNames = v
+    end
 })
 
-CombatTab:CreateToggle({
+ESPTab:CreateToggle({
     Name = "Show Distance",
     CurrentValue = true,
-    Callback = function(v) espSettings.ShowDistance = v end
+    Flag = "ESPDistance",
+    Callback = function(v)
+        espSettings.ShowDistance = v
+    end
 })
 
-CombatTab:CreateToggle({
+ESPTab:CreateToggle({
     Name = "Show Health",
     CurrentValue = true,
-    Callback = function(v) espSettings.ShowHealth = v end
+    Flag = "ESPHealth",
+    Callback = function(v)
+        espSettings.ShowHealth = v
+    end
 })
 
-CombatTab:CreateToggle({
+ESPTab:CreateToggle({
     Name = "Team Check",
     CurrentValue = true,
-    Callback = function(v) espSettings.TeamCheck = v end
+    Flag = "ESPTeamCheck",
+    Callback = function(v)
+        espSettings.TeamCheck = v
+    end
 })
 
-CombatTab:CreateSection("Hitbox Expander")
+ESPTab:CreateSlider({
+    Name = "Max Distance",
+    Range = {500, 5000},
+    Increment = 100,
+    CurrentValue = 2000,
+    Flag = "ESPMaxDist",
+    Callback = function(v)
+        espSettings.MaxDistance = v
+    end
+})
 
-CombatTab:CreateToggle({
-    Name = "🎯 Enable Circular Hitbox",
+-- ═══════════════════════════════════════
+-- HITBOX TAB
+-- ═══════════════════════════════════════
+
+local HitboxTab = Window:CreateTab("🎯 Hitbox", 4483362458)
+
+HitboxTab:CreateToggle({
+    Name = "🎯 Enable Hitbox",
     CurrentValue = false,
+    Flag = "Hitbox",
     Callback = function(v)
         if v then
             enableHitbox()
-            Rayfield:Notify({Title = "🎯 Hitbox ON", Content = "Circular hitboxes enabled", Duration = 3})
+            Rayfield:Notify({Title = "Hitbox", Content = "Hitbox activado", Duration = 2})
         else
             disableHitbox()
         end
     end
 })
 
-CombatTab:CreateSlider({
+HitboxTab:CreateSlider({
     Name = "Hitbox Size",
     Range = {5, 50},
     Increment = 1,
     CurrentValue = 15,
+    Flag = "HitboxSize",
     Callback = function(v)
         hitboxSize = v
         if hitboxEnabled then
             disableHitbox()
-            wait(0.1)
+            task.wait(0.1)
             enableHitbox()
         end
     end
 })
 
-CombatTab:CreateSlider({
-    Name = "Hitbox Transparency",
+HitboxTab:CreateSlider({
+    Name = "Visual Transparency (1=Invisible)",
     Range = {0, 1},
     Increment = 0.1,
-    CurrentValue = 0.5,
+    CurrentValue = 1,
+    Flag = "HitboxTrans",
     Callback = function(v)
         hitboxTransparency = v
-        for _, hitbox in pairs(hitboxParts) do
-            if hitbox and hitbox.Parent then
-                hitbox.Transparency = v
-            end
+        if hitboxEnabled then
+            disableHitbox()
+            task.wait(0.1)
+            enableHitbox()
         end
     end
 })
 
+HitboxTab:CreateLabel("💡 Tip: Usar transparency=1 para mejor rendimiento")
+
 -- ═══════════════════════════════════════
--- LOOT TAB
+-- CHEST TAB
 -- ═══════════════════════════════════════
 
-local LootTab = Window:CreateTab("📦 Loot", 4483362458)
+local ChestTab = Window:CreateTab("📦 Chest", 4483362458)
 
-LootTab:CreateSection("Chest Finder")
-
-LootTab:CreateToggle({
-    Name = "📦 Chest ESP",
+ChestTab:CreateToggle({
+    Name = "📦 Enable Chest ESP",
     CurrentValue = false,
+    Flag = "ChestESP",
     Callback = function(v)
         if v then
             enableChestESP()
-            Rayfield:Notify({Title = "📦 Chest ESP", Content = "Chest ESP enabled", Duration = 3})
+            Rayfield:Notify({Title = "Chest ESP", Content = "Chest ESP activado", Duration = 2})
         else
             disableChestESP()
         end
     end
 })
 
-LootTab:CreateToggle({
-    Name = "🤖 Auto Open Chests",
-    CurrentValue = false,
+ChestTab:CreateToggle({
+    Name = "Show Highlight",
+    CurrentValue = true,
+    Flag = "ChestHighlight",
     Callback = function(v)
-        autoOpenChestsEnabled = v
-        Rayfield:Notify({Title = "🤖 Auto Open", Content = v and "Enabled" or "Disabled", Duration = 3})
+        chestESPSettings.ShowHighlight = v
+        updateChestESP()
     end
 })
 
-LootTab:CreateButton({
-    Name = "🔄 Refresh Chest Scan",
+ChestTab:CreateToggle({
+    Name = "Show Distance",
+    CurrentValue = true,
+    Flag = "ChestDistance",
+    Callback = function(v)
+        chestESPSettings.ShowDistance = v
+        updateChestESP()
+    end
+})
+
+ChestTab:CreateButton({
+    Name = "🔄 Refresh Scan",
     Callback = function()
         disableChestESP()
-        wait(0.5)
+        task.wait(0.5)
         enableChestESP()
-        Rayfield:Notify({Title = "🔄 Refreshed", Content = "Chest scan updated", Duration = 2})
-    end
-})
-
--- ═══════════════════════════════════════
--- MOVEMENT TAB
--- ═══════════════════════════════════════
-
-local MovementTab = Window:CreateTab("🚀 Movement", 4483362458)
-
-MovementTab:CreateSection("Speed & Jump")
-
-MovementTab:CreateSlider({
-    Name = "WalkSpeed",
-    Range = {16, 200},
-    Increment = 1,
-    CurrentValue = 16,
-    Callback = function(v)
-        if player.Character and player.Character:FindFirstChild("Humanoid") then
-            player.Character.Humanoid.WalkSpeed = v
-        end
-    end
-})
-
-MovementTab:CreateSlider({
-    Name = "JumpPower",
-    Range = {50, 300},
-    Increment = 5,
-    CurrentValue = 50,
-    Callback = function(v)
-        if player.Character and player.Character:FindFirstChild("Humanoid") then
-            player.Character.Humanoid.JumpPower = v
-        end
-    end
-})
-
-MovementTab:CreateSection("Fly & NoClip")
-
-MovementTab:CreateToggle({
-    Name = "🚁 Fly (WASD + Space/Ctrl)",
-    CurrentValue = false,
-    Callback = function(v)
-        flyEnabled = v
-        if v then
-            startFly()
-            Rayfield:Notify({Title = "🚁 Fly", Content = "Fly enabled - Use WASD", Duration = 3})
-        else
-            stopFly()
-        end
-    end
-})
-
-MovementTab:CreateSlider({
-    Name = "Fly Speed",
-    Range = {10, 200},
-    Increment = 5,
-    CurrentValue = 50,
-    Callback = function(v)
-        flySpeed = v
-    end
-})
-
-MovementTab:CreateToggle({
-    Name = "👻 NoClip",
-    CurrentValue = false,
-    Callback = function(v)
-        noClipEnabled = v
-        if v then
-            enableNoClip()
-            Rayfield:Notify({Title = "👻 NoClip", Content = "NoClip enabled", Duration = 3})
-        else
-            disableNoClip()
-        end
+        Rayfield:Notify({Title = "Refreshed", Content = "Chest scan actualizado", Duration = 2})
     end
 })
 
@@ -777,11 +617,11 @@ MiscTab:CreateButton({
     end
 })
 
--- Success notification
+-- Success
 Rayfield:Notify({
-    Title = "✅ Hub Loaded!",
-    Content = "Fortblox Ultimate Hub ready",
+    Title = "✅ Loaded!",
+    Content = "Fortblox Hub - Optimizado",
     Duration = 5
 })
 
-print("✅ Fortblox Ultimate Hub loaded successfully!")
+print("✅ Fortblox Hub loaded!")
